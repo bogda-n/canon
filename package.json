@@ -13,7 +13,7 @@
     "axios": "^0.25.0",
     "cheerio": "^1.0.0-rc.10",
     "fs-extra": "^10.0.0",
-    "p-queue": "^6.0.1",
+    "p-queue": "^6.6.2",
     "simple-excel-to-json": "^2.3.0",
     "xlsx": "^0.18.0"
   }
