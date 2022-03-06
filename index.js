@@ -2,7 +2,7 @@ const axios = require('axios')
 const cheerio = require('cheerio')
 const fs = require('fs-extra')
 const path = require('path')
-const {default: PQueue} = require('p-queue')
+const { default: PQueue } = require('p-queue')
 const excelToJson = require('simple-excel-to-json')
 const xlsx = require('xlsx')
 
@@ -41,10 +41,11 @@ const processing = async (sku) => {
   return new Promise(async (resolve, reject) => {
     try {
       const product = {}
+      let productImages = []
       for (const locale in locales) {
         let blocks = {}
         const language = locales[locale]
-        const url = `${baseUrl}${language}${sku.mpn}/`
+        const url = `${baseUrl}${language}${(sku.mpn).trim()}/`
         // console.log('processing', sku.mpn)
         try {
           const response = await axios.get(url)
@@ -57,6 +58,7 @@ const processing = async (sku) => {
               .replace(/#\S+/gmi, '').trim()
 
             const text = $(element).find('[class="header-5 mom-tab--heading"]').text()
+              .replace((/\.\w+.+www.+/igm), '.')
 
             const image = 'https:' + $(element)
               .find('[class="product-image-zoom"]')
@@ -66,7 +68,15 @@ const processing = async (sku) => {
             product['RequestedBrandName'] = 'Canon'
             product['RequestedProductCode'] = sku.mpn
             product['ProductName INT'] = sku.mpn
-            product['Image INT 1'] = image
+
+
+            $('.product-image-zoom').each(function () {
+              if($(this).children('a').attr('href')){
+                const images = 'https:' + $(this).children('a').attr('href')
+                  .replace(/\?w=\d+&/, '?w=8000&')
+                productImages.push(images)
+              }
+            })
 
             const translations = {
               benefits: ['benefits', 'points forts', 'vantaggi', 'vorteile'],
@@ -130,11 +140,16 @@ const processing = async (sku) => {
           if (e.response?.status !== 404) {
             throw new Error(e)
           }
-          console.error(e.message, '-' , sku.mpn)
+          console.error(e.message, '-', sku.mpn, locale)
 
         }
       }
-
+      productImages = [...new Set(productImages)]
+      let imageNumber = 0
+      for (const image of productImages) {
+        imageNumber += 1
+        product[`Image INT ${imageNumber}`] = image
+      }
       products.push(product)
       console.log('end processing', sku.mpn)
       resolve()
@@ -148,7 +163,8 @@ const processing = async (sku) => {
 
 const start = async () => {
   try {
-    const queue = new PQueue({ concurrency: 5 })
+    // queue.add(() => Promise.resolve())
+    const queue = new PQueue({ concurrency: 10 })
     queue.on('add', () => {
       console.log(`Task is added.  Size: ${queue.size}  Pending: ${queue.pending}`)
     })
@@ -159,11 +175,12 @@ const start = async () => {
       console.log('queue is clean', new Date())
       createReport()
     })
-    // queue.add(() => Promise.resolve())
+
     for (let sku of file[0]) {
       queue.add(() => processing(sku))
-    //   await processing(sku)
+      // break
     }
+
   } catch (error) {
     console.error(error)
   }
